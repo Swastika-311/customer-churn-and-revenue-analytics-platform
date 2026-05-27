@@ -1,1 +1,1 @@
-# telco-churn-revenue-analytics
+# customer-churn-and-revenue-analytics-platform
