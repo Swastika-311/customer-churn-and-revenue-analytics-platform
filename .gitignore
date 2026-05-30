@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ignore local Anconda Project Directory files
+anaconda_projects/
