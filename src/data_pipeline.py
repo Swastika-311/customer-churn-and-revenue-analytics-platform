@@ -138,6 +138,10 @@ def treat_outliers(df: pd.DataFrame) -> pd.DataFrame:
 # FEATURE ENGINEERING
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df['revenue_per_month'] = (df['total_charges'] / (df['tenure_months'] + 1)).round(2)
+    df['total_to_monthly_charge_ratio']=df['total_charges']/(df['monthly_charges'] + 1e-5)
+    bins = [0, 6, 12, 24, 48, 72, np.inf]
+    labels = ['0-6 Months', '6-12 Months', '12-24 Months', '24-48 Months', '48-72 Months', '72+ Months']
+    df['tenure_group'] = pd.cut(df['tenure_months'], bins=bins, labels=labels, include_lowest=True)
     df['is_long_term_customer'] = (df['tenure_months'] >= 24).astype(int)
     df['churn_risk_band'] = pd.cut(
         df['churn_score'], 
@@ -157,6 +161,10 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 # SCALE + ENCODE FOR ML
 def scale_and_encode(df: pd.DataFrame):
     df_ml = df.copy()
+
+    if 'tenure_group' in df_ml.columns:
+        df_ml['tenure_group'] = df_ml['tenure_group'].astype(str)
+
     drop_cols=["customerid", "zip_code", "latitude", "longitude",
         "churn_reason", "churn_risk_band", "contract"] + [c for c in df_ml.columns if c.endswith('_outlier_flag')]
     df_ml = df_ml.drop(columns=[c for c in drop_cols if c in df_ml.columns])
@@ -166,12 +174,13 @@ def scale_and_encode(df: pd.DataFrame):
     for col in binary_cols:
         if col in df_ml.columns:
             df_ml[col] = df_ml[col].map(yn_map)
+
     service_cols = ["multiple_lines", "online_security", "online_backup", "device_protection", "tech_support", "streaming_tv", "streaming_movies"]
     for col in service_cols:
         if col in df.columns:
             df_ml[col] = df[col].map({'Yes': 1, 'No': 0})
 
-    nominal_cols = [c for c in ["internet_service", "payment_method", "city"] if c in df.columns]
+    nominal_cols = [c for c in ["internet_service", "payment_method", "city", 'tenure_group'] if c in df.columns]
     encoder = None
     if nominal_cols:
         encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
@@ -189,7 +198,7 @@ def scale_and_encode(df: pd.DataFrame):
         c for c in [
             "tenure_months", "monthly_charges", 
             "total_charges", "churn_score", "cltv", 
-            "revenue_per_month", "contract_numeric"]
+            "revenue_per_month", "contract_numeric", 'total_to_monthly_charge_ratio']
         if c in feature_cols
     ]
 
@@ -198,6 +207,9 @@ def scale_and_encode(df: pd.DataFrame):
         df_ml[numeric_to_scale] = scaler.fit_transform(df_ml[numeric_to_scale])
         log.info(f"StandardScaler applied to: {numeric_to_scale}")
 
+    df_ml = pd.concat([df_ml[feature_cols], target], axis=1)
+    df_ml = df_ml.select_dtypes(include=[np.number])
+    
     return df_ml, scaler, encoder
 
 
